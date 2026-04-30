@@ -1,0 +1,47 @@
+<mujoco model="Dr_arm_6_desk">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+
+  <asset>
+    <mesh name="base_link" content_type="model/stl" file="base_link.STL"/>
+    <mesh name="Link_1" content_type="model/stl" file="Link_1.STL"/>
+    <mesh name="Link_2" content_type="model/stl" file="Link_2.STL"/>
+    <mesh name="Link_3" content_type="model/stl" file="Link_3.STL"/>
+    <mesh name="Link_4" content_type="model/stl" file="Link_4.STL"/>
+    <mesh name="Link_5" content_type="model/stl" file="Link_5.STL"/>
+    <mesh name="Link_6" content_type="model/stl" file="Link_6.STL"/>
+  </asset>
+
+  <worldbody>
+    <geom type="mesh" rgba="1 1 1 1" mesh="base_link"/>
+    <body name="Link_1">
+      <inertial pos="8.6995e-10 0.00050458 -0.0046158" quat="0.474739 0.524045 -0.524045 0.474739" mass="0.57909" diaginertia="0.000672336 0.00064662 0.000485144"/>
+      <joint name="Joint_1" pos="0 0 0" axis="0 0 1" range="-1.5 1.5"/>
+      <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="Link_1"/>
+      <body name="Link_2" quat="0.707105 0.707108 0 0">
+        <inertial pos="0.19121 -0.00017114 -0.060879" quat="0.499503 0.500488 0.49921 0.500797" mass="0.66136" diaginertia="0.0016167 0.0014892 0.00065139"/>
+        <joint name="Joint_2" pos="0 0 0" axis="0 0 -1" range="-2 -0.6"/>
+        <geom type="mesh" rgba="1 0 0 1" mesh="Link_2"/>
+        <body name="Link_3" pos="0.224 0 0">
+          <inertial pos="0.17761 -0.00026979 0.028228" quat="0.496169 0.50379 0.505102 0.494858" mass="0.41995" diaginertia="0.0012688 0.00114405 0.000359029"/>
+          <joint name="Joint_3" pos="0 0 0" axis="0 0 1" range="-0.5 1"/>
+          <geom type="mesh" rgba="1 0 0 1" mesh="Link_3"/>
+          <body name="Link_4" pos="0.224 0 0">
+            <inertial pos="0.035627 -3.3901e-09 -0.050721" quat="-0.00592762 0.715 -0.00606664 0.699073" mass="0.34986" diaginertia="0.00031227 0.000310019 0.000155581"/>
+            <joint name="Joint_4" pos="0 0 0" axis="0 0 -1" range="-1.5 1.5"/>
+            <geom type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="Link_4"/>
+            <body name="Link_5" pos="0 0 -0.0524" quat="0.707105 0 0.707108 0">
+              <inertial pos="-0.025179 -1.9039e-09 0.15848" quat="0.494944 0.505005 0.505005 0.494944" mass="0.32328" diaginertia="0.00030022 0.000298834 0.000140276"/>
+              <joint name="Joint_5" pos="0 0 0" axis="0 0 1" range="-3.14 3.14"/>
+              <geom type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="Link_5"/>
+              <body name="Link_6" pos="0 0 0.164" quat="0.705768 -0.0434937 -0.705768 0.0434937">
+                <inertial pos="0 0 0.075469" quat="0.5 0.5 -0.5 0.5" mass="0.012646" diaginertia="6.8601e-06 3.5343e-06 3.5343e-06"/>
+                <joint name="Joint_6" pos="0 0 0" axis="0 0 1" range="-3.14 3.14"/>
+                <geom type="mesh" rgba="0.66667 0.69804 0.76863 1" mesh="Link_6"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
