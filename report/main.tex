@@ -16,6 +16,8 @@
 \usepackage{subcaption}
 \usepackage{siunitx}
 
+\setmonofont{Noto Sans Mono CJK SC}
+
 \geometry{left=2.6cm,right=2.6cm,top=2.8cm,bottom=2.8cm}
 \graphicspath{{figures/}}
 \setlength{\parindent}{2em}
@@ -41,9 +43,28 @@
   numberstyle=\tiny\color{gray},
   xleftmargin=2em,
   framexleftmargin=1.5em,
+  literate={≈}{{$\approx$}}1
+           {π}{{$\pi$}}1
+           {τ}{{$\tau$}}1
+           {α}{{$\alpha$}}1
+           {θ}{{$\theta$}}1
+           {↔}{{$\leftrightarrow$}}1
+           {∈}{{$\in$}}1
+           {≥}{{$\geq$}}1
+           {℃}{{$^\circ$C}}2
+           {⚠}{{\textbf{!}}}1,
   postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space},
   aboveskip=0.8em,
   belowskip=0.8em
+}
+\lstdefinestyle{appendixcode}{
+  style=robotcode,
+  basicstyle=\ttfamily\scriptsize,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=1.2em,
+  framexleftmargin=1em,
+  aboveskip=0.6em,
+  belowskip=0.6em
 }
 \lstset{style=robotcode}
 
@@ -81,5 +102,8 @@
 \nocite{opencv,roboticstoolbox,ultralytics}
 \bibliographystyle{plain}
 \bibliography{references}
+
+\appendix
+\input{chapters/08_appendix_code}
 
 \end{document}

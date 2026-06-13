@@ -81,7 +81,7 @@ f_x&0&c_x\\
 
 外参估计程序为 \path{daran/task3/pose_projection.py}。在工作平面上放置棋盘格后，程序通过 \texttt{cv2.solvePnP} 求解世界坐标系到相机坐标系的变换矩阵，并保存 \path{camera_extrinsic.json}。实验得到的外参重投影误差约为 0.0215 px。
 
-对于一个像素点 $(u,v)$，程序先使用内参和畸变参数通过 \texttt{cv2.undistortPoints} 得到相机归一化射线，再将射线变换到世界坐标系，并与工作平面 $z=z_0$ 求交：
+对于一个像素点 $(u,v)$，程序先使用内参和畸变参数通过 \texttt{cv2.\allowbreak undistortPoints} 得到相机归一化射线，再将射线变换到世界坐标系，并与工作平面 $z=z_0$ 求交：
 \[
 P_W = O_W + \lambda d_W,\quad
 \lambda = \frac{z_0-O_{W,z}}{d_{W,z}} .
