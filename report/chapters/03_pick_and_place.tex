@@ -6,13 +6,14 @@
 
 \subsection{任务流程设计}
 
-程序位于 \texttt{daran/task2/pick\_and\_place.py}，采用示教点回放方式完成 A 点抓取和 B 点放置。示教文件 \texttt{ref\_pose.json} 中记录了四个关键点：
+程序位于 \path{daran/task2/pick_and_place.py}，采用示教点回放方式完成 A 点抓取和 B 点放置。示教文件 \path{ref_pose.json} 中记录了四个关键点：
 
 \begin{table}[H]
   \centering
   \caption{抓取搬运实验示教点}
   \label{tab:pick-place-points}
-  \begin{tabular}{lll}
+  \small
+  \begin{tabularx}{0.82\textwidth}{L{1.5cm}L{2.5cm}Y}
     \toprule
     顺序 & 名称 & 含义 \\
     \midrule
@@ -21,7 +22,7 @@
     3 & B\_safe & B 点上方安全位 \\
     4 & B\_place & B 点放置位 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 完整执行序列为：
@@ -36,7 +37,7 @@ B_{\text{safe}}\rightarrow \text{park}.
 
 脚本定义了固定 park 位姿 $[0,90,0,0,0,0]^\circ$ 作为任务起止安全姿态。示教点中的关节角全部经过限位检查，A/B 安全点还需满足末端高度不低于 \SI{130}{mm}，safe 点到 grasp/place 点的下降幅度不得超过 \SI{120}{mm}。
 
-夹爪控制未直接使用原始 \texttt{grasp()} 接口，而是根据实测关系调用底层 \texttt{set\_angle\_adaptive}：
+夹爪控制未直接使用原始 \texttt{grasp()} 接口，而是根据实测关系调用底层 \path{set_angle_adaptive}：
 \[
 \theta_g = w \cdot \frac{-180}{\pi d},
 \]
@@ -55,6 +56,14 @@ B_{\text{safe}}\rightarrow \text{park}.
 \end{itemize}
 
 值得注意的是，脚本头部注释要求先将 \texttt{MOVE\_REAL\_ROBOT} 设为 \texttt{False} 生成仿真动画，确认无误后再由操作者手动改为 \texttt{True} 执行实机。这一模式降低了误操作导致碰撞的风险。
+
+抓取搬运的核心动作序列和夹爪宽度到角度的换算如代码 \ref{lst:exp3-code} 所示。代码中将移动动作和夹爪动作放在同一计划列表中，便于仿真和实机执行共用同一套流程。
+
+\lstinputlisting[
+  language=Python,
+  caption={抓取搬运动作序列与夹爪宽度换算},
+  label={lst:exp3-code}
+]{code/exp3_pick_and_place.py}
 
 \subsection{实验结果与分析}
 

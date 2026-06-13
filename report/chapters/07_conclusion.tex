@@ -5,8 +5,11 @@
 本学期六组实验从基础环境配置开始，逐步完成机械臂运动控制、抓取搬运、相机标定和视觉引导抓取。整体技术路线可以概括为：
 
 \[
-\text{环境配置}\rightarrow \text{运动学建模}\rightarrow \text{轨迹规划}\rightarrow
-\text{抓取动作}\rightarrow \text{相机标定}\rightarrow \text{视觉识别}\rightarrow \text{视觉抓取}.
+\begin{aligned}
+\text{环境配置}&\rightarrow \text{运动学建模}\rightarrow \text{轨迹规划}\\
+&\rightarrow \text{抓取动作}\rightarrow \text{相机标定}
+\rightarrow \text{视觉识别}\rightarrow \text{视觉抓取}.
+\end{aligned}
 \]
 
 实验一完成了 Python、Robotics Toolbox、OpenCV、串口通信等基础环境配置；实验二建立 DH 模型并实现末端直线运动；实验三在示教点基础上完成抓取搬运；实验四通过棋盘格标定获得相机内参、畸变参数和工作平面坐标关系；实验五使用颜色分割完成目标定位和视觉抓取；实验六使用 YOLO 替代颜色阈值识别，提高了视觉前端的鲁棒性和可扩展性。

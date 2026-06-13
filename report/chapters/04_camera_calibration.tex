@@ -29,14 +29,14 @@ f_x&0&c_x\\
 
 \subsection{内参与畸变标定}
 
-内参标定程序为 \texttt{daran/task3/camera\_calibration.py}。程序支持实时采集和从已有图片标定两种方式。实验使用 $7\times7$ 内角点棋盘格，方格边长为 \SI{0.008}{m}，有效标定图像共 30 张。程序流程如下：
+内参标定程序为 \path{daran/task3/camera_calibration.py}。程序支持实时采集和从已有图片标定两种方式。实验使用 $7\times7$ 内角点棋盘格，方格边长为 \SI{0.008}{m}，有效标定图像共 30 张。程序流程如下：
 
 \begin{enumerate}
   \item 使用 \texttt{cv2.findChessboardCorners} 检测棋盘格角点。
   \item 使用 \texttt{cv2.cornerSubPix} 对角点进行亚像素优化。
   \item 构造棋盘格世界坐标点。
   \item 调用 \texttt{cv2.calibrateCamera} 求解内参和畸变。
-  \item 保存 \texttt{camera\_calibration.json}、\texttt{camera\_calibration.npz} 和去畸变示例图。
+  \item 保存 \path{camera_calibration.json}、\path{camera_calibration.npz} 和去畸变示例图。
 \end{enumerate}
 
 标定结果如表 \ref{tab:camera-calib} 所示。
@@ -45,7 +45,8 @@ f_x&0&c_x\\
   \centering
   \caption{相机内参标定结果}
   \label{tab:camera-calib}
-  \begin{tabular}{ll}
+  \small
+  \begin{tabularx}{0.72\textwidth}{L{3.5cm}Y}
     \toprule
     项目 & 数值 \\
     \midrule
@@ -58,8 +59,16 @@ f_x&0&c_x\\
     $c_x$ & 319.2541 \\
     $c_y$ & 239.6599 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
+
+标定程序中棋盘格三维点生成、角点检测和相机标定调用如代码 \ref{lst:exp4-code} 所示。该部分是后续所有像素坐标转换的基础。
+
+\lstinputlisting[
+  language=Python,
+  caption={棋盘格角点检测与相机内参标定核心代码},
+  label={lst:exp4-code}
+]{code/exp4_camera_calibration.py}
 
 \begin{figure}[H]
   \centering
@@ -70,14 +79,14 @@ f_x&0&c_x\\
 
 \subsection{工作空间坐标转换}
 
-外参估计程序为 \texttt{daran/task3/pose\_projection.py}。在工作平面上放置棋盘格后，程序通过 \texttt{cv2.solvePnP} 求解世界坐标系到相机坐标系的变换矩阵，并保存 \texttt{camera\_extrinsic.json}。实验得到的外参重投影误差约为 0.0215 px。
+外参估计程序为 \path{daran/task3/pose_projection.py}。在工作平面上放置棋盘格后，程序通过 \texttt{cv2.solvePnP} 求解世界坐标系到相机坐标系的变换矩阵，并保存 \path{camera_extrinsic.json}。实验得到的外参重投影误差约为 0.0215 px。
 
 对于一个像素点 $(u,v)$，程序先使用内参和畸变参数通过 \texttt{cv2.undistortPoints} 得到相机归一化射线，再将射线变换到世界坐标系，并与工作平面 $z=z_0$ 求交：
 \[
 P_W = O_W + \lambda d_W,\quad
 \lambda = \frac{z_0-O_{W,z}}{d_{W,z}} .
 \]
-在视觉抓取实验中，还需要将棋盘格或相机工作平面坐标转换到机械臂基坐标。当前 \texttt{workspace\_transform.json} 中采用的轴关系为：
+在视觉抓取实验中，还需要将棋盘格或相机工作平面坐标转换到机械臂基坐标。当前 \path{workspace_transform.json} 中采用的轴关系为：
 \[
 x_{\text{base}}=-y_{\text{cam}}+0.300,\quad
 y_{\text{base}}=x_{\text{cam}}-0.028,\quad

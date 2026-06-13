@@ -6,6 +6,7 @@
 \usepackage{amssymb}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage{tabularx}
 \usepackage{longtable}
 \usepackage{float}
 \usepackage{xcolor}
@@ -21,10 +22,14 @@
 \setlength{\parskip}{0.35em}
 \linespread{1.25}
 \emergencystretch=3em
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\codepath}[1]{\path{#1}}
 
 \lstdefinestyle{robotcode}{
   basicstyle=\ttfamily\small,
   breaklines=true,
+  breakatwhitespace=false,
   frame=single,
   columns=fullflexible,
   keepspaces=true,
@@ -35,7 +40,10 @@
   numbers=left,
   numberstyle=\tiny\color{gray},
   xleftmargin=2em,
-  framexleftmargin=1.5em
+  framexleftmargin=1.5em,
+  postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space},
+  aboveskip=0.8em,
+  belowskip=0.8em
 }
 \lstset{style=robotcode}
 

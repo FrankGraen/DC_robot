@@ -6,13 +6,14 @@
 
 \subsection{机械臂运动学模型}
 
-实验采用标准 DH 参数建立六自由度机械臂模型。模型在 \texttt{daran/task1/dh\_cartesian\_line\_motion.ipynb}、\texttt{daran/task2/pick\_and\_place.py} 和 \texttt{daran/task3/visual\_grasp.py} 中保持一致，均由 \texttt{roboticstoolbox} 的 \texttt{DHRobot} 和 \texttt{RevoluteDH} 构造。
+实验采用标准 DH 参数建立六自由度机械臂模型。模型在 \path{daran/task1/dh_cartesian_line_motion.ipynb}、\path{daran/task2/pick_and_place.py} 和 \path{daran/task3/visual_grasp.py} 中保持一致，均由 \texttt{roboticstoolbox} 的 \texttt{DHRobot} 和 \texttt{RevoluteDH} 构造。
 
 \begin{table}[H]
   \centering
   \caption{机械臂标准 DH 参数表}
   \label{tab:dh-params}
-  \begin{tabular}{ccccc}
+  \small
+  \begin{tabularx}{\textwidth}{L{1.5cm}YYYY}
     \toprule
     关节 & $a_i$/m & $\alpha_i$/rad & $d_i$/m & $\theta_i$ \\
     \midrule
@@ -23,7 +24,7 @@
     5 & 0 & $-\pi/2$ & 0.068 & $q_5$ \\
     6 & 0 & 0 & 0.033 & $q_6$ \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 关节角限位设置为：
@@ -40,7 +41,7 @@ q_{\max}=[160,180,160,160,180,180]^\circ .
 \[
 q_{\text{park}}=[0,90,0,0,0,0]^\circ .
 \]
-在 notebook 中，起点由正运动学得到，终点通过 \texttt{path\_end\_mm} 指定。程序调用 \texttt{rtb.tools.trajectory.ctraj} 在起止末端位姿之间生成笛卡尔路径，再对每个路径点使用 \texttt{ikine\_LM} 求逆运动学。为了保证关节空间轨迹连续，第 $k$ 个点的逆解会作为第 $k+1$ 个点的初值。
+在 notebook 中，起点由正运动学得到，终点通过 \texttt{path\_end\_mm} 指定。程序调用 \path{rtb.tools.trajectory.ctraj} 在起止末端位姿之间生成笛卡尔路径，再对每个路径点使用 \texttt{ikine\_LM} 求逆运动学。为了保证关节空间轨迹连续，第 $k$ 个点的逆解会作为第 $k+1$ 个点的初值。
 
 路径生成可概括为：
 \[
@@ -63,6 +64,14 @@ q_k=\text{IK}(T_k,q_{k-1}) .
 \end{enumerate}
 
 notebook 输出显示，轨迹点数为 40，最大 IK 位置残差约为 \SI{0.636}{mm}。该误差相对桌面机械臂的操作尺度较小，说明逆运动学求解能够较好跟踪笛卡尔插补路径。
+
+关键代码如代码 \ref{lst:exp2-code} 所示，主要体现了 DH 模型构建、\texttt{ctraj} 笛卡尔插补和逐点逆运动学求解。
+
+\lstinputlisting[
+  language=Python,
+  caption={末端直线运动轨迹生成与逆运动学求解},
+  label={lst:exp2-code}
+]{code/exp2_cartesian_line_motion.py}
 
 \subsection{仿真与实验结果}
 

@@ -6,7 +6,7 @@
 
 \subsection{颜色分割与目标定位}
 
-颜色识别代码主要位于 \texttt{daran/color\_pick\_place/detect.py}。程序定义了红、绿、蓝、黄四类颜色的 HSV 阈值范围，对图像进行颜色分割后，通过轮廓提取获得候选色块。检测流程如下：
+颜色识别代码主要位于 \path{daran/color_pick_place/detect.py}。程序定义了红、绿、蓝、黄四类颜色的 HSV 阈值范围，对图像进行颜色分割后，通过轮廓提取获得候选色块。检测流程如下：
 
 \begin{enumerate}
   \item 读取相机图像并根据标定参数进行去畸变。
@@ -20,6 +20,14 @@
 
 对于蓝色和绿色，程序还叠加了 BGR 通道约束。例如蓝色目标要求蓝色通道显著高于红色和绿色通道，以增强在复杂光照下的鲁棒性。
 
+颜色阈值分割和轮廓提取的核心代码如代码 \ref{lst:exp5-color-code} 所示。该代码保留了原实验中“HSV 阈值 + 形态学处理 + 最小外接矩形”的基本流程。
+
+\lstinputlisting[
+  language=Python,
+  caption={颜色阈值分割与色块轮廓提取},
+  label={lst:exp5-color-code}
+]{code/exp5_color_visual_grasp.py}
+
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.72\textwidth]{task5_color_raw_image.png}
@@ -29,15 +37,15 @@
 
 \subsection{像素坐标到机械臂坐标转换}
 
-坐标转换由 \texttt{daran/color\_pick\_place/convert.py} 实现。检测结果可以是像素点 $(u,v)$，也可以包含角度信息的字典：
+坐标转换由 \path{daran/color_pick_place/convert.py} 实现。检测结果可以是像素点 $(u,v)$，也可以包含角度信息的字典：
 \[
 \{ \text{center}:(u,v),\ \text{angle}:\theta \}.
 \]
 转换步骤如下：
 
 \begin{enumerate}
-  \item 读取 \texttt{camera\_calibration\_result.json} 中的相机内参和畸变参数。
-  \item 读取 \texttt{extrinsics.json} 中相机到机械臂基坐标的齐次变换 $T_{\text{robot}}^{\text{camera}}$。
+  \item 读取 \path{camera_calibration_result.json} 中的相机内参和畸变参数。
+  \item 读取 \path{extrinsics.json} 中相机到机械臂基坐标的齐次变换 $T_{\text{robot}}^{\text{camera}}$。
   \item 使用 \texttt{cv2.undistortPoints} 将像素点转换为相机归一化射线。
   \item 将射线变换到机械臂坐标系，并与桌面平面 $z=\SI{80}{mm}$ 求交。
   \item 输出机械臂坐标 $(x,y,z)$ 和抓取姿态 $(pitch,yaw,roll)$。
@@ -45,9 +53,17 @@
 
 色块角度用于调整末端 yaw。程序采用 \texttt{angle\_gain=-1} 和方块角度折返函数，将图像中的平面旋转角映射到夹爪绕竖直方向的角度修正。
 
+像素射线与桌面平面求交的实现如代码 \ref{lst:exp5-convert-code} 所示。它先将像素点去畸变为相机归一化射线，再通过相机到机械臂坐标变换求出机器人坐标系下的桌面交点。
+
+\lstinputlisting[
+  language=Python,
+  caption={像素点转换到机械臂桌面坐标的核心代码},
+  label={lst:exp5-convert-code}
+]{code/exp5_pixel_to_robot.py}
+
 \subsection{抓取流程设计}
 
-完整抓取流程由 \texttt{daran/color\_pick\_place/main.py} 实现。程序先构造检测器，再进入“识别、选择、规划、仿真、执行”的循环。颜色识别模式下，检测器为 \texttt{ColorBlockDetector}；程序会过滤已经在目标区域附近的物块，选择需要搬运的目标，然后构造 pick 和 place 两个 \texttt{RobotPose}。
+完整抓取流程由 \path{daran/color_pick_place/main.py} 实现。程序先构造检测器，再进入“识别、选择、规划、仿真、执行”的循环。颜色识别模式下，检测器为 \texttt{ColorBlockDetector}；程序会过滤已经在目标区域附近的物块，选择需要搬运的目标，然后构造 pick 和 place 两个 \texttt{RobotPose}。
 
 抓取动作序列为：
 \[
@@ -55,7 +71,7 @@
 \text{transit}\rightarrow \text{place\_up}\rightarrow \text{place\_down}\rightarrow
 \text{place\_up}.
 \]
-其中每个位姿都包含末端位置、姿态和夹爪开合状态。程序调用 \texttt{JointActionMotion.solve()} 将位姿动作转换为关节动作，再先进行仿真预览，确认后才执行实机运动。
+其中每个位姿都包含末端位置、姿态和夹爪开合状态。程序调用 \path{JointActionMotion.solve()} 将位姿动作转换为关节动作，再先进行仿真预览，确认后才执行实机运动。
 
 \subsection{实验结果与分析}
 
@@ -68,7 +84,7 @@
   \label{fig:task5-visual-grasp}
 \end{figure}
 
-实验中还通过人工示教建立了像素到机械臂坐标的经验仿射关系，\texttt{calib\_result.json} 中记录的二维仿射矩阵为：
+实验中还通过人工示教建立了像素到机械臂坐标的经验仿射关系，\path{calib_result.json} 中记录的二维仿射矩阵为：
 \[
 \begin{bmatrix}
 x_r\\y_r

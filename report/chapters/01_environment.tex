@@ -11,7 +11,8 @@
 \begin{table}[H]
   \centering
   \caption{实验环境主要软件依赖}
-  \begin{tabular}{lll}
+  \small
+  \begin{tabularx}{\textwidth}{L{2.3cm}Y Y}
     \toprule
     类别 & 软件包 & 用途 \\
     \midrule
@@ -22,7 +23,7 @@
     深度学习 & \texttt{torch}, \texttt{torchvision} & YOLO 训练和推理基础 \\
     通信控制 & \texttt{pyserial} & 串口转 CAN 通信 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 首次配置时可在仓库根目录执行：
@@ -36,7 +37,7 @@ conda activate robot
 
 \subsection{硬件连接与安全约束}
 
-机械臂通过串口转 CAN 模块与上位机通信，默认波特率为 115200。代码中常见串口名称包括 Windows 下的 \texttt{COM4}/\texttt{COM7}，Linux 或 Jetson 下的 \texttt{/dev/ttyUSB0}，以及部分脚本中使用的 \texttt{/dev/serial/by-id/...}。由于 \texttt{arm\_robot} 对象在实例化后会打开串口并控制真实硬件，实验中必须区分仿真脚本和实机脚本。
+机械臂通过串口转 CAN 模块与上位机通信，默认波特率为 115200。代码中常见串口名称包括 Windows 下的 \texttt{COM4}/\texttt{COM7}，Linux 或 Jetson 下的 \path{/dev/ttyUSB0}，以及部分脚本中使用的 \path{/dev/serial/by-id/...}。由于 \texttt{arm\_robot} 对象在实例化后会打开串口并控制真实硬件，实验中必须区分仿真脚本和实机脚本。
 
 本仓库形成了明确的“先仿真、后实机”安全模式。以任务 1 和任务 2 为例，脚本中使用 \texttt{MOVE\_REAL\_ROBOT} 或 \texttt{--dry-run}/\texttt{--execute} 这样的开关控制是否真实运动；在打开实机开关前，需要先检查关节限位、桌面高度、目标点可达性和仿真动画。后续报告中的仿真验证均遵守这一原则，不直接执行会驱动真实机械臂的代码。
 
@@ -50,18 +51,19 @@ conda activate robot
   \centering
   \caption{实验内容与仓库文件对应关系}
   \label{tab:repo-map}
-  \begin{tabular}{lll}
+  \small
+  \begin{tabularx}{\textwidth}{L{2.2cm}Y Y}
     \toprule
     实验 & 主要目录或文件 & 内容 \\
     \midrule
-    环境配置 & \texttt{environment.yml}, \texttt{CLAUDE.md} & 环境、依赖、运行约束 \\
-    直线运动 & \texttt{daran/task1/} & DH 建模、IK、直线轨迹仿真 \\
-    抓取搬运 & \texttt{daran/task2/pick\_and\_place.py} & 示教点回放和夹爪控制 \\
-    相机标定 & \texttt{daran/task3/camera\_calibration.py} & 棋盘格内参标定 \\
-    颜色视觉抓取 & \texttt{daran/task3/visual\_grasp.py}, \texttt{daran/color\_pick\_place/} & 颜色检测、坐标转换、抓取规划 \\
-    YOLO 视觉抓取 & \texttt{daran/color\_pick\_place/yolo/} & 数据集、训练、推理与接口复用 \\
+    环境配置 & \path{environment.yml}, \path{CLAUDE.md} & 环境、依赖、运行约束 \\
+    直线运动 & \path{daran/task1/} & DH 建模、IK、直线轨迹仿真 \\
+    抓取搬运 & \path{daran/task2/pick_and_place.py} & 示教点回放和夹爪控制 \\
+    相机标定 & \path{daran/task3/camera_calibration.py} & 棋盘格内参标定 \\
+    颜色视觉抓取 & \path{daran/task3/visual_grasp.py}, \path{daran/color_pick_place/} & 颜色检测、坐标转换、抓取规划 \\
+    YOLO 视觉抓取 & \path{daran/color_pick_place/yolo/} & 数据集、训练、推理与接口复用 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \subsection{实验结果与小结}
