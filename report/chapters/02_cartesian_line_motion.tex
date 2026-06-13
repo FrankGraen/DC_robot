@@ -1,0 +1,87 @@
+\section{实验二：机械臂末端直线运动控制}
+
+\subsection{实验目的}
+
+本实验要求控制机械臂末端沿笛卡尔空间中的一条直线运动。实验重点是建立机械臂 DH 模型，利用正运动学得到末端位姿，通过笛卡尔插补生成直线路径，并对路径上的每个采样点进行逆运动学求解，最终得到连续的关节角轨迹。
+
+\subsection{机械臂运动学模型}
+
+实验采用标准 DH 参数建立六自由度机械臂模型。模型在 \texttt{daran/task1/dh\_cartesian\_line\_motion.ipynb}、\texttt{daran/task2/pick\_and\_place.py} 和 \texttt{daran/task3/visual\_grasp.py} 中保持一致，均由 \texttt{roboticstoolbox} 的 \texttt{DHRobot} 和 \texttt{RevoluteDH} 构造。
+
+\begin{table}[H]
+  \centering
+  \caption{机械臂标准 DH 参数表}
+  \label{tab:dh-params}
+  \begin{tabular}{ccccc}
+    \toprule
+    关节 & $a_i$/m & $\alpha_i$/rad & $d_i$/m & $\theta_i$ \\
+    \midrule
+    1 & 0 & $\pi/2$ & 0 & $q_1$ \\
+    2 & 0.15 & 0 & 0 & $q_2$ \\
+    3 & 0.15 & 0 & 0 & $q_3$ \\
+    4 & 0 & $\pi/2$ & -0.05494 & $q_4+\pi/2$ \\
+    5 & 0 & $-\pi/2$ & 0.068 & $q_5$ \\
+    6 & 0 & 0 & 0.033 & $q_6$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+关节角限位设置为：
+\[
+q_{\min}=[-160,-40,-160,-160,-180,-180]^\circ,
+\quad
+q_{\max}=[160,180,160,160,180,180]^\circ .
+\]
+在每次轨迹生成后，程序都会检查所有关节角是否位于该范围内，并检查各 DH 坐标系原点是否高于桌面安全线。
+
+\subsection{直线轨迹规划方法}
+
+直线运动实验的起点采用安全竖直 park 姿态：
+\[
+q_{\text{park}}=[0,90,0,0,0,0]^\circ .
+\]
+在 notebook 中，起点由正运动学得到，终点通过 \texttt{path\_end\_mm} 指定。程序调用 \texttt{rtb.tools.trajectory.ctraj} 在起止末端位姿之间生成笛卡尔路径，再对每个路径点使用 \texttt{ikine\_LM} 求逆运动学。为了保证关节空间轨迹连续，第 $k$ 个点的逆解会作为第 $k+1$ 个点的初值。
+
+路径生成可概括为：
+\[
+T_k=\text{ctraj}(T_0,T_1,N)_k,\quad
+q_k=\text{IK}(T_k,q_{k-1}) .
+\]
+其中 $T_k$ 为第 $k$ 个末端位姿，$q_k$ 为对应关节角，$N$ 为轨迹点数。
+
+\subsection{程序实现}
+
+核心程序位于 \texttt{daran/task1/dh\_cartesian\_line\_motion.ipynb}。该 notebook 的主要步骤包括：
+
+\begin{enumerate}
+  \item 使用 DH 参数和关节限位创建 \texttt{DFarm\_StdDH} 模型。
+  \item 设置起点 park 姿态和终点 \texttt{path\_end\_mm}。
+  \item 使用 \texttt{ctraj} 生成笛卡尔直线轨迹。
+  \item 对每个轨迹点调用 \texttt{ikine\_LM} 求解关节角。
+  \item 计算实际末端位置与目标点的残差。
+  \item 生成末端轨迹动画和关节角变化图。
+\end{enumerate}
+
+notebook 输出显示，轨迹点数为 40，最大 IK 位置残差约为 \SI{0.636}{mm}。该误差相对桌面机械臂的操作尺度较小，说明逆运动学求解能够较好跟踪笛卡尔插补路径。
+
+\subsection{仿真与实验结果}
+
+图 \ref{fig:task1-target} 展示了单目标位姿仿真结果，图 \ref{fig:task1-joints} 展示了对应关节角变化曲线。仿真结果表明，机械臂可以从初始安全姿态运动到目标末端位姿，且关节角变化处于限位范围内。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\textwidth]{task1_single_target_final.png}
+  \caption{机械臂目标位姿仿真结果}
+  \label{fig:task1-target}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\textwidth]{task1_single_target_joints.png}
+  \caption{目标运动过程中的关节角变化}
+  \label{fig:task1-joints}
+\end{figure}
+
+\subsection{结果分析与小结}
+
+本实验验证了 DH 建模、笛卡尔插补和数值逆运动学组合使用的可行性。相比直接在关节空间线性插值，笛卡尔空间插补可以更直接约束末端轨迹形状；但其代价是每个路径点都需要进行逆运动学求解，并且可能受初值、关节限位和奇异位形影响。因此程序中采用前一点解作为下一点初值，并在仿真阶段进行限位和桌面高度检查，为后续抓取搬运提供了安全的运动规划基础。

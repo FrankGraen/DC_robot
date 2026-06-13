@@ -1,0 +1,109 @@
+\section{实验四：相机标定}
+
+\subsection{实验目的}
+
+本实验目标是获得相机内参、畸变参数以及相机与工作平面之间的位姿关系，为后续从图像像素坐标推算机械臂抓取坐标提供基础。没有可靠的相机标定，视觉识别只能得到像素位置，无法直接用于机械臂运动控制。
+
+\subsection{相机成像模型}
+
+实验采用针孔相机模型。空间点 $P_C=[X_C,Y_C,Z_C]^T$ 在相机坐标系下投影到像素平面：
+\[
+s
+\begin{bmatrix}
+u\\v\\1
+\end{bmatrix}
+=
+K
+\begin{bmatrix}
+X_C\\Y_C\\Z_C
+\end{bmatrix},
+\quad
+K=
+\begin{bmatrix}
+f_x&0&c_x\\
+0&f_y&c_y\\
+0&0&1
+\end{bmatrix}.
+\]
+其中 $K$ 为相机内参矩阵，$f_x,f_y$ 为像素焦距，$c_x,c_y$ 为主点坐标。实际镜头还存在径向畸变和切向畸变，需要通过标定估计畸变系数。
+
+\subsection{内参与畸变标定}
+
+内参标定程序为 \texttt{daran/task3/camera\_calibration.py}。程序支持实时采集和从已有图片标定两种方式。实验使用 $7\times7$ 内角点棋盘格，方格边长为 \SI{0.008}{m}，有效标定图像共 30 张。程序流程如下：
+
+\begin{enumerate}
+  \item 使用 \texttt{cv2.findChessboardCorners} 检测棋盘格角点。
+  \item 使用 \texttt{cv2.cornerSubPix} 对角点进行亚像素优化。
+  \item 构造棋盘格世界坐标点。
+  \item 调用 \texttt{cv2.calibrateCamera} 求解内参和畸变。
+  \item 保存 \texttt{camera\_calibration.json}、\texttt{camera\_calibration.npz} 和去畸变示例图。
+\end{enumerate}
+
+标定结果如表 \ref{tab:camera-calib} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{相机内参标定结果}
+  \label{tab:camera-calib}
+  \begin{tabular}{ll}
+    \toprule
+    项目 & 数值 \\
+    \midrule
+    图像尺寸 & $640\times480$ \\
+    有效图像数 & 30 \\
+    RMS 重投影误差 & 0.2025 px \\
+    平均重投影误差 & 0.2025 px \\
+    $f_x$ & 381.2781 \\
+    $f_y$ & 508.3521 \\
+    $c_x$ & 319.2541 \\
+    $c_y$ & 239.6599 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{task4_undistorted_example.jpg}
+  \caption{相机去畸变示例图}
+  \label{fig:task4-undistorted}
+\end{figure}
+
+\subsection{工作空间坐标转换}
+
+外参估计程序为 \texttt{daran/task3/pose\_projection.py}。在工作平面上放置棋盘格后，程序通过 \texttt{cv2.solvePnP} 求解世界坐标系到相机坐标系的变换矩阵，并保存 \texttt{camera\_extrinsic.json}。实验得到的外参重投影误差约为 0.0215 px。
+
+对于一个像素点 $(u,v)$，程序先使用内参和畸变参数通过 \texttt{cv2.undistortPoints} 得到相机归一化射线，再将射线变换到世界坐标系，并与工作平面 $z=z_0$ 求交：
+\[
+P_W = O_W + \lambda d_W,\quad
+\lambda = \frac{z_0-O_{W,z}}{d_{W,z}} .
+\]
+在视觉抓取实验中，还需要将棋盘格或相机工作平面坐标转换到机械臂基坐标。当前 \texttt{workspace\_transform.json} 中采用的轴关系为：
+\[
+x_{\text{base}}=-y_{\text{cam}}+0.300,\quad
+y_{\text{base}}=x_{\text{cam}}-0.028,\quad
+z_{\text{base}}=z_{\text{cam}}.
+\]
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{task4_camera_extrinsic_preview.jpg}
+  \caption{棋盘格外参估计与坐标轴投影}
+  \label{fig:task4-extrinsic}
+\end{figure}
+
+\subsection{标定结果与分析}
+
+从内参标定结果看，平均重投影误差约为 0.20 px，说明棋盘格角点拟合精度较高。外参估计的重投影误差更低，约为 0.0215 px，表明在单幅棋盘格图像上估计得到的位姿与角点观测匹配良好。
+
+但需要注意，图像重投影误差小并不等价于机械臂抓取误差一定小。抓取误差还会受到以下因素影响：
+
+\begin{itemize}
+  \item 相机安装位置和工作平面是否稳定；
+  \item 棋盘格平面与真实物体上表面是否存在高度差；
+  \item 像素中心提取是否受光照、遮挡和颜色反光影响；
+  \item 机械臂自身运动学模型和舵机回差误差。
+\end{itemize}
+
+\subsection{小结}
+
+本实验完成了从像素坐标到工作平面坐标的关键标定。后续颜色识别和 YOLO 识别都只是获得目标像素中心，真正能让机械臂去抓取目标的是本实验建立的相机内参、外参和工作空间到机械臂基坐标的转换关系。

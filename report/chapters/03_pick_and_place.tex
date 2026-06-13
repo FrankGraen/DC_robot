@@ -1,0 +1,74 @@
+\section{实验三：机械臂抓取与搬运}
+
+\subsection{实验目的}
+
+本实验要求控制机械臂从一点抓取物体，并搬运到另一点放置。与单纯的末端轨迹控制相比，抓取搬运任务需要同时处理关键位姿序列、夹爪开合、桌面安全高度和实机执行保护。
+
+\subsection{任务流程设计}
+
+程序位于 \texttt{daran/task2/pick\_and\_place.py}，采用示教点回放方式完成 A 点抓取和 B 点放置。示教文件 \texttt{ref\_pose.json} 中记录了四个关键点：
+
+\begin{table}[H]
+  \centering
+  \caption{抓取搬运实验示教点}
+  \label{tab:pick-place-points}
+  \begin{tabular}{lll}
+    \toprule
+    顺序 & 名称 & 含义 \\
+    \midrule
+    1 & A\_safe & A 点上方安全位 \\
+    2 & A\_grasp & A 点抓取位 \\
+    3 & B\_safe & B 点上方安全位 \\
+    4 & B\_place & B 点放置位 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+完整执行序列为：
+\[
+\text{park}\rightarrow A_{\text{safe}}\rightarrow A_{\text{grasp}}\rightarrow
+A_{\text{safe}}\rightarrow B_{\text{safe}}\rightarrow B_{\text{place}}\rightarrow
+B_{\text{safe}}\rightarrow \text{park}.
+\]
+其中到达 A 点抓取位后闭合夹爪，到达 B 点放置位后打开夹爪。
+
+\subsection{关键位姿与夹爪控制}
+
+脚本定义了固定 park 位姿 $[0,90,0,0,0,0]^\circ$ 作为任务起止安全姿态。示教点中的关节角全部经过限位检查，A/B 安全点还需满足末端高度不低于 \SI{130}{mm}，safe 点到 grasp/place 点的下降幅度不得超过 \SI{120}{mm}。
+
+夹爪控制未直接使用原始 \texttt{grasp()} 接口，而是根据实测关系调用底层 \texttt{set\_angle\_adaptive}：
+\[
+\theta_g = w \cdot \frac{-180}{\pi d},
+\]
+其中 $w$ 为夹爪开口宽度，$d=\SI{10}{mm}$ 为夹爪传动直径。实验中张开宽度为 \SI{6.0}{mm}，夹紧宽度为 \SI{1.8}{mm}，闭爪力约为 \SI{40}{N}。
+
+\subsection{程序实现}
+
+抓取搬运程序沿用了实验二中的 DH 模型和关节限位。主要函数包括：
+
+\begin{itemize}
+  \item \texttt{load\_waypoints()}：读取示教点并检查数据长度和关节限位。
+  \item \texttt{safety\_check\_reference\_set()}：计算示教点正运动学位置，检查桌面高度、安全点高度和下降幅度。
+  \item \texttt{build\_plan()}：构造移动和夹爪动作序列。
+  \item \texttt{verify\_ee\_z\_floor()}：检查整条轨迹末端高度下限。
+  \item \texttt{MOVE\_REAL\_ROBOT}：控制是否真实下发串口指令。
+\end{itemize}
+
+值得注意的是，脚本头部注释要求先将 \texttt{MOVE\_REAL\_ROBOT} 设为 \texttt{False} 生成仿真动画，确认无误后再由操作者手动改为 \texttt{True} 执行实机。这一模式降低了误操作导致碰撞的风险。
+
+\subsection{实验结果与分析}
+
+图 \ref{fig:task3-pick-place} 为抓取搬运动画中抽取的一帧。实验流程中，机械臂先回到竖直 park 姿态，再移动到 A 点上方；下降到抓取位后闭合夹爪，随后抬升、平移至 B 点上方，再下降放置并打开夹爪。该流程避免了物体在桌面附近长距离水平移动，从而降低夹爪、物体和桌面发生干涉的可能性。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\textwidth]{task3_pick_and_place_frame.png}
+  \caption{抓取搬运动画静态帧}
+  \label{fig:task3-pick-place}
+\end{figure}
+
+实验中四个示教点由实机示教得到，示教时间为 2026 年 5 月 14 日。A 点和 B 点均设置 safe/grasp 或 safe/place 两级高度，体现出抓取任务中“先到上方、再垂直下降”的基本安全策略。
+
+\subsection{小结}
+
+本实验将前一实验中的轨迹规划扩展为包含夹爪动作的任务级流程。其关键不是单个点的运动，而是多个安全位姿之间的顺序约束。后续视觉抓取实验本质上也是先通过视觉确定抓取点，再自动生成类似的 safe-grasp-safe 序列，因此本实验为视觉抓取提供了动作模板。

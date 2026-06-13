@@ -1,0 +1,89 @@
+\section{实验五：基于颜色识别的视觉抓取}
+
+\subsection{实验目的}
+
+本实验在相机标定基础上，通过颜色识别获得物体在图像中的位置，再将像素坐标转换为机械臂基坐标，生成抓取轨迹并完成放置任务。相比前面的示教点抓取，本实验的抓取点由视觉实时获得，体现了从固定动作回放到视觉引导动作规划的转变。
+
+\subsection{颜色分割与目标定位}
+
+颜色识别代码主要位于 \texttt{daran/color\_pick\_place/detect.py}。程序定义了红、绿、蓝、黄四类颜色的 HSV 阈值范围，对图像进行颜色分割后，通过轮廓提取获得候选色块。检测流程如下：
+
+\begin{enumerate}
+  \item 读取相机图像并根据标定参数进行去畸变。
+  \item 将 BGR 图像转换到 HSV 颜色空间。
+  \item 根据目标颜色阈值生成二值 mask。
+  \item 使用开运算和闭运算去除噪声、填补孔洞。
+  \item 通过 \texttt{cv2.findContours} 提取轮廓。
+  \item 根据面积阈值和长宽比过滤非方块目标。
+  \item 使用 \texttt{cv2.minAreaRect} 得到目标中心、边界框和旋转角。
+\end{enumerate}
+
+对于蓝色和绿色，程序还叠加了 BGR 通道约束。例如蓝色目标要求蓝色通道显著高于红色和绿色通道，以增强在复杂光照下的鲁棒性。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{task5_color_raw_image.png}
+  \caption{颜色识别实验采集图像示例}
+  \label{fig:task5-color-raw}
+\end{figure}
+
+\subsection{像素坐标到机械臂坐标转换}
+
+坐标转换由 \texttt{daran/color\_pick\_place/convert.py} 实现。检测结果可以是像素点 $(u,v)$，也可以包含角度信息的字典：
+\[
+\{ \text{center}:(u,v),\ \text{angle}:\theta \}.
+\]
+转换步骤如下：
+
+\begin{enumerate}
+  \item 读取 \texttt{camera\_calibration\_result.json} 中的相机内参和畸变参数。
+  \item 读取 \texttt{extrinsics.json} 中相机到机械臂基坐标的齐次变换 $T_{\text{robot}}^{\text{camera}}$。
+  \item 使用 \texttt{cv2.undistortPoints} 将像素点转换为相机归一化射线。
+  \item 将射线变换到机械臂坐标系，并与桌面平面 $z=\SI{80}{mm}$ 求交。
+  \item 输出机械臂坐标 $(x,y,z)$ 和抓取姿态 $(pitch,yaw,roll)$。
+\end{enumerate}
+
+色块角度用于调整末端 yaw。程序采用 \texttt{angle\_gain=-1} 和方块角度折返函数，将图像中的平面旋转角映射到夹爪绕竖直方向的角度修正。
+
+\subsection{抓取流程设计}
+
+完整抓取流程由 \texttt{daran/color\_pick\_place/main.py} 实现。程序先构造检测器，再进入“识别、选择、规划、仿真、执行”的循环。颜色识别模式下，检测器为 \texttt{ColorBlockDetector}；程序会过滤已经在目标区域附近的物块，选择需要搬运的目标，然后构造 pick 和 place 两个 \texttt{RobotPose}。
+
+抓取动作序列为：
+\[
+\text{pick\_up}\rightarrow \text{pick\_down}\rightarrow \text{pick\_up}\rightarrow
+\text{transit}\rightarrow \text{place\_up}\rightarrow \text{place\_down}\rightarrow
+\text{place\_up}.
+\]
+其中每个位姿都包含末端位置、姿态和夹爪开合状态。程序调用 \texttt{JointActionMotion.solve()} 将位姿动作转换为关节动作，再先进行仿真预览，确认后才执行实机运动。
+
+\subsection{实验结果与分析}
+
+图 \ref{fig:task5-visual-grasp} 展示了 task3 中锁定视觉抓取目标后的图像结果。颜色识别方法实现简单、推理速度快，不需要训练数据；但它依赖 HSV 阈值和光照条件，且当背景中存在相近颜色、阴影或反光时容易产生误检。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\textwidth]{task5_visual_grasp_locked.jpg}
+  \caption{颜色视觉抓取目标锁定结果}
+  \label{fig:task5-visual-grasp}
+\end{figure}
+
+实验中还通过人工示教建立了像素到机械臂坐标的经验仿射关系，\texttt{calib\_result.json} 中记录的二维仿射矩阵为：
+\[
+\begin{bmatrix}
+x_r\\y_r
+\end{bmatrix}
+=
+\begin{bmatrix}
+0.0146&0.2952&140.9101\\
+0.2440&0.0154&-224.5123
+\end{bmatrix}
+\begin{bmatrix}
+u\\v\\1
+\end{bmatrix},
+\]
+其 RMS 误差约为 \SI{14.10}{mm}。该结果说明，经验标定能快速建立视觉到抓取坐标的映射，但精度会受示教点数量、示教误差和工作平面线性假设影响。
+
+\subsection{小结}
+
+基于颜色识别的视觉抓取完成了从图像目标到机械臂动作的闭环链路。该方法适合颜色明显、光照稳定、背景简单的桌面场景；但当目标类别增多或颜色受环境影响明显时，单纯 HSV 阈值需要频繁调参。因此实验六进一步引入 YOLO，将颜色阈值识别替换为训练得到的目标检测模型。

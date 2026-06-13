@@ -1,0 +1,69 @@
+\section{实验一：开发环境配置}
+
+\subsection{实验目的}
+
+本实验的目标是完成机械臂综合实验的软件与硬件基础环境配置，为后续运动控制、视觉感知和抓取实验提供统一的运行平台。环境配置不仅包括 Python 依赖安装，还包括机械臂串口通信方式、仿真模型文件、实验代码目录和安全运行约束的确认。
+
+\subsection{软件环境}
+
+本实验仓库根目录提供了 \texttt{environment.yml}，用于创建名为 \texttt{robot} 的 conda 环境。环境中 Python 版本为 3.10.20，主要依赖包括：
+
+\begin{table}[H]
+  \centering
+  \caption{实验环境主要软件依赖}
+  \begin{tabular}{lll}
+    \toprule
+    类别 & 软件包 & 用途 \\
+    \midrule
+    机器人建模 & \texttt{roboticstoolbox-python}, \texttt{spatialmath-python} & DH 建模、正逆运动学、轨迹规划 \\
+    数值计算 & \texttt{numpy}, \texttt{scipy}, \texttt{modern-robotics} & 矩阵计算、优化求解 \\
+    视觉处理 & \texttt{opencv-python}, \texttt{opencv-contrib-python} & 相机标定、颜色分割、图像显示 \\
+    仿真与显示 & \texttt{matplotlib}, \texttt{pybullet}, \texttt{trimesh} & 轨迹可视化、模型检查 \\
+    深度学习 & \texttt{torch}, \texttt{torchvision} & YOLO 训练和推理基础 \\
+    通信控制 & \texttt{pyserial} & 串口转 CAN 通信 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+首次配置时可在仓库根目录执行：
+
+\begin{lstlisting}[language=bash,caption={conda 环境创建命令}]
+conda env create -f environment.yml
+conda activate robot
+\end{lstlisting}
+
+后续运行实验脚本时，应优先在 \texttt{daran/} 或其子目录下执行，以保证相对路径中的模型文件、字体文件和标定结果可以正确加载。
+
+\subsection{硬件连接与安全约束}
+
+机械臂通过串口转 CAN 模块与上位机通信，默认波特率为 115200。代码中常见串口名称包括 Windows 下的 \texttt{COM4}/\texttt{COM7}，Linux 或 Jetson 下的 \texttt{/dev/ttyUSB0}，以及部分脚本中使用的 \texttt{/dev/serial/by-id/...}。由于 \texttt{arm\_robot} 对象在实例化后会打开串口并控制真实硬件，实验中必须区分仿真脚本和实机脚本。
+
+本仓库形成了明确的“先仿真、后实机”安全模式。以任务 1 和任务 2 为例，脚本中使用 \texttt{MOVE\_REAL\_ROBOT} 或 \texttt{--dry-run}/\texttt{--execute} 这样的开关控制是否真实运动；在打开实机开关前，需要先检查关节限位、桌面高度、目标点可达性和仿真动画。后续报告中的仿真验证均遵守这一原则，不直接执行会驱动真实机械臂的代码。
+
+\subsection{仓库结构与实验代码组织}
+
+实验代码主要位于 \texttt{daran/} 目录下。核心机械臂控制代码采用逐层继承结构：底层 \texttt{DrEmpower\_can.py} 负责串口/CAN 协议，\texttt{arm\_six\_axis.py} 实现六轴运动学，\texttt{gripper.py} 添加夹爪控制，\texttt{arm\_robot.py} 提供面向实验脚本的机械臂控制接口。
+
+与本报告六个实验对应的主要文件如表 \ref{tab:repo-map} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{实验内容与仓库文件对应关系}
+  \label{tab:repo-map}
+  \begin{tabular}{lll}
+    \toprule
+    实验 & 主要目录或文件 & 内容 \\
+    \midrule
+    环境配置 & \texttt{environment.yml}, \texttt{CLAUDE.md} & 环境、依赖、运行约束 \\
+    直线运动 & \texttt{daran/task1/} & DH 建模、IK、直线轨迹仿真 \\
+    抓取搬运 & \texttt{daran/task2/pick\_and\_place.py} & 示教点回放和夹爪控制 \\
+    相机标定 & \texttt{daran/task3/camera\_calibration.py} & 棋盘格内参标定 \\
+    颜色视觉抓取 & \texttt{daran/task3/visual\_grasp.py}, \texttt{daran/color\_pick\_place/} & 颜色检测、坐标转换、抓取规划 \\
+    YOLO 视觉抓取 & \texttt{daran/color\_pick\_place/yolo/} & 数据集、训练、推理与接口复用 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{实验结果与小结}
+
+通过环境配置实验，完成了 conda 环境、核心依赖、机械臂控制接口和实验目录结构的确认。后续实验均建立在同一个 \texttt{robot} 环境和同一套机械臂模型参数之上，因此环境一致性是保证实验结果可复现的前提。安全方面，本报告后续只运行不触发真实硬件动作的仿真、读取和编译命令；涉及真实机械臂的脚本仅作为实现逻辑分析材料。

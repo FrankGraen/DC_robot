@@ -1,0 +1,77 @@
+\documentclass[UTF8,a4paper,12pt]{ctexart}
+
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{siunitx}
+
+\geometry{left=2.6cm,right=2.6cm,top=2.8cm,bottom=2.8cm}
+\graphicspath{{figures/}}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.35em}
+\linespread{1.25}
+\emergencystretch=3em
+
+\lstdefinestyle{robotcode}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  keywordstyle=\color{blue!60!black},
+  commentstyle=\color{green!40!black},
+  stringstyle=\color{red!50!black},
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=2em,
+  framexleftmargin=1.5em
+}
+\lstset{style=robotcode}
+
+\title{\textbf{机器人综合实验报告}}
+\author{
+  课程名称：机器人综合实验\\
+  姓名：\underline{\hspace{4cm}}\\
+  学号：\underline{\hspace{4cm}}\\
+  班级：\underline{\hspace{4cm}}\\
+  指导教师：\underline{\hspace{4cm}}
+}
+\date{2026 年 6 月}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\pagenumbering{Roman}
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+
+\input{chapters/00_abstract}
+\input{chapters/01_environment}
+\input{chapters/02_cartesian_line_motion}
+\input{chapters/03_pick_and_place}
+\input{chapters/04_camera_calibration}
+\input{chapters/05_color_visual_grasp}
+\input{chapters/06_yolo_visual_grasp}
+\input{chapters/07_conclusion}
+
+\nocite{opencv,roboticstoolbox,ultralytics}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

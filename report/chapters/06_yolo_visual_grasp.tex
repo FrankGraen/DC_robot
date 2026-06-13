@@ -1,0 +1,93 @@
+\section{实验六：基于 YOLO 的视觉抓取}
+
+\subsection{实验目的}
+
+本实验在颜色视觉抓取的基础上，将目标识别部分替换为 YOLO 检测算法。实验目标不是重新编写整套抓取系统，而是保持后端坐标转换、姿态规划、IK 求解和夹爪控制不变，仅将前端目标检测器从 HSV 阈值分割替换为学习型目标检测模型。
+
+\subsection{数据集与类别设计}
+
+YOLO 数据位于 \texttt{daran/color\_pick\_place/yolo/}。数据集类别包含 red、green、blue 三类色块。根据 \texttt{bootstrap\_summary.json}，数据集中共有 213 张图像、1041 个标注框，各类别数量如表 \ref{tab:yolo-dataset} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{YOLO 数据集统计}
+  \label{tab:yolo-dataset}
+  \begin{tabular}{lcc}
+    \toprule
+    类别 & 标注框数量 & 占比 \\
+    \midrule
+    red & 391 & 37.6\% \\
+    green & 320 & 30.7\% \\
+    blue & 330 & 31.7\% \\
+    \midrule
+    合计 & 1041 & 100\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\texttt{data.yaml} 指定训练集和验证集目录，并定义类别名称。需要注意的是，该文件中的数据集路径为原训练机器上的绝对路径，因此在不同机器上复现实验时需要将 \texttt{path} 改为当前仓库下的实际路径。
+
+\subsection{YOLO 模型训练与推理}
+
+训练脚本为 \texttt{daran/color\_pick\_place/yolo/train.py}。程序从 \texttt{yolo11n.pt} 初始化模型，训练 120 个 epoch，输入尺寸为 960，batch size 为 16。由于类别本身就是颜色，训练脚本中特意设置 \texttt{hsv\_h=0.0}，避免色相增强把红色样本扰动成橙色或其它颜色，从而破坏类别标签。几何增强则保持较强，包括 \SI{180}{\degree} 旋转、水平/垂直翻转、平移、缩放和 mosaic。
+
+最终训练结果位于 \texttt{runs/blocks/}，权重文件包括 \texttt{best.pt} 和 \texttt{last.pt}。训练曲线和混淆矩阵如图 \ref{fig:task6-training} 和图 \ref{fig:task6-confusion} 所示。最后一个 epoch 的验证指标约为 precision=0.9917、recall=0.9922、mAP50=0.9915、mAP50--95=0.8577。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{task6_yolo_training_results.png}
+  \caption{YOLO 训练指标曲线}
+  \label{fig:task6-training}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.68\textwidth]{task6_yolo_confusion_matrix.png}
+  \caption{YOLO 验证集混淆矩阵}
+  \label{fig:task6-confusion}
+\end{figure}
+
+\subsection{与颜色识别方法的接口复用}
+
+YOLO 检测器实现于 \texttt{daran/color\_pick\_place/yolo/yolo\_detector.py}。该模块被设计为与 \texttt{ColorBlockDetector} 兼容，二者都提供：
+
+\begin{lstlisting}[language=Python,caption={检测器接口约定}]
+recognize() -> [{"type": str, "center": (u, v), "angle": float}, ...]
+release()
+\end{lstlisting}
+
+因此 \texttt{main.py} 中只需通过参数选择 \texttt{--detector yolo} 或 \texttt{--detector color}，后续 \texttt{camera\_observation\_to\_robot\_pose()}、目标筛选、抓取动作构造和运动执行均可复用。
+
+YOLO 检测器的一个关键设计是：YOLO 负责给出目标类别和边界框，随后仍在检测框 ROI 内调用原颜色 mask 和 \texttt{cv2.minAreaRect} 细化中心点和角度。这样做保留了旧系统对 \texttt{center} 和 \texttt{angle} 的定义，避免后端抓取姿态映射重新标定。
+
+\subsection{实验结果与对比分析}
+
+图 \ref{fig:task6-parity} 展示了 YOLO 检测和原有颜色逻辑对齐检查的结果。相比颜色阈值方法，YOLO 能利用目标形状、上下文和训练样本分布，在光照变化、局部阴影和颜色接近背景时更稳定；但 YOLO 也引入了训练数据、标注质量、模型权重和推理设备依赖。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.76\textwidth]{task6_yolo_parity_overlay.jpg}
+  \caption{YOLO 检测结果与颜色逻辑对齐检查}
+  \label{fig:task6-parity}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{颜色识别与 YOLO 识别对比}
+  \label{tab:color-yolo-compare}
+  \begin{tabular}{lll}
+    \toprule
+    项目 & 颜色阈值识别 & YOLO 识别 \\
+    \midrule
+    前期成本 & 无需训练，调阈值即可 & 需要采集、标注和训练数据 \\
+    推理速度 & 很快，CPU 即可 & 取决于模型和设备 \\
+    光照适应性 & 较弱，需调 HSV 阈值 & 较强，依赖训练集覆盖 \\
+    可扩展性 & 类别增多后阈值维护困难 & 可通过新增类别和再训练扩展 \\
+    与抓取接口 & 直接输出中心和角度 & 输出框后再细化中心和角度 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{小结}
+
+本实验完成了视觉识别模块的算法升级。通过保持检测器输出接口一致，YOLO 能够无缝接入原有抓取系统，使实验五中的坐标转换、轨迹规划和夹爪控制继续复用。该设计体现了良好的模块边界：感知前端可以替换，运动控制后端保持稳定。
