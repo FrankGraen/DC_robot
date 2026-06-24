@@ -21,6 +21,8 @@ import sys
 import time
 from pathlib import Path
 
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 import cv2
 import numpy as np
 
@@ -46,7 +48,7 @@ QMAX_DEG = [160, 180, 160, 160, 180, 180]
 PARK_POSE_DEG = [0, 90, 0, 0, 0, 0]
 DEFAULT_ORIENTATION_Q_DEG = [0, -60, 60, 180, 0, 0]
 
-DESK_Z_MIN_M = -0.02
+DESK_Z_MIN_M = 0.0
 JOINT_SPEED_RPM = 2.0
 SEG_WAYPOINTS = 40
 
@@ -84,8 +86,35 @@ def parse_args():
     parser.add_argument("--plane-z", type=float, default=0.0, help="Workspace plane z in board coordinates, meters.")
     parser.add_argument("--target-height-mm", type=float, default=10.0, help="Object top height above robot base plane.")
     parser.add_argument("--approach-height-mm", type=float, default=70.0)
+    parser.add_argument(
+        "--desk-z-min-mm",
+        type=float,
+        default=DESK_Z_MIN_M * 1000.0,
+        help="Minimum allowed DH frame z during safety checks, in robot-base millimeters.",
+    )
     parser.add_argument("--grasp-offset-mm", nargs=3, type=float, default=[0.0, 0.0, 0.0])
     parser.add_argument("--orientation-q-deg", nargs=6, type=float, default=DEFAULT_ORIENTATION_Q_DEG)
+    parser.add_argument(
+        "--orientation-ref",
+        default="",
+        help="Optional ref_pose.json path. If set, use one taught pose orientation as grasp orientation.",
+    )
+    parser.add_argument(
+        "--orientation-ref-index",
+        type=int,
+        default=1,
+        help="Index in --orientation-ref to use; task2 A_grasp is usually index 1.",
+    )
+    parser.add_argument("--simulate", action="store_true", help="Save a PyPlot animation gif of the planned motion.")
+    parser.add_argument("--animation-output", default="calibration_output/visual_grasp_anim.gif")
+    parser.add_argument(
+        "--plot-box",
+        nargs=6,
+        type=float,
+        default=[-0.05, 0.40, -0.25, 0.25, -0.05, 0.35],
+        metavar=("XMIN", "XMAX", "YMIN", "YMAX", "ZMIN", "ZMAX"),
+        help="Simulation plot limits in meters.",
+    )
     parser.add_argument("--execute", action="store_true", help="Actually move the robot and gripper.")
     parser.add_argument("--dry-run-image", default="", help="Use one image instead of live camera.")
 
@@ -97,6 +126,48 @@ def parse_args():
     make_tf.add_argument("--x-point-board-mm", nargs=3, type=float, default=[8.0, 0.0, 0.0])
     make_tf.add_argument("--y-point-board-mm", nargs=3, type=float, default=[0.0, 8.0, 0.0])
     make_tf.add_argument("--output", default="calibration_output/workspace_transform.json")
+
+    make_tf_origin = sub.add_parser(
+        "make-workspace-transform-from-origin",
+        help="Create board->robot-base transform when robot origin is known in board/camera plane coordinates.",
+    )
+    make_tf_origin.add_argument(
+        "--robot-origin-board-cm",
+        nargs=2,
+        type=float,
+        required=True,
+        metavar=("X_CM", "Y_CM"),
+        help="Robot base origin expressed in board/camera plane coordinates, centimeters.",
+    )
+    make_tf_origin.add_argument(
+        "--robot-origin-board-z-cm",
+        type=float,
+        default=0.0,
+        help="Robot base origin z in board/camera coordinates, centimeters.",
+    )
+    make_tf_origin.add_argument("--flip-x", action="store_true", help="Use if robot-base X is opposite to board/camera X.")
+    make_tf_origin.add_argument("--flip-y", action="store_true", help="Use if robot-base Y is opposite to board/camera Y.")
+    make_tf_origin.add_argument("--output", default="calibration_output/workspace_transform.json")
+
+    make_tf_cam_origin = sub.add_parser(
+        "make-workspace-transform-camera-origin",
+        help="Create transform for robot_x=-camera_y, robot_y=camera_x using camera origin in robot base.",
+    )
+    make_tf_cam_origin.add_argument(
+        "--camera-origin-base-cm",
+        nargs=2,
+        type=float,
+        required=True,
+        metavar=("X_CM", "Y_CM"),
+        help="Camera/workspace origin expressed in robot base coordinates, centimeters.",
+    )
+    make_tf_cam_origin.add_argument(
+        "--camera-origin-base-z-cm",
+        type=float,
+        default=0.0,
+        help="Camera/workspace origin z in robot base coordinates, centimeters.",
+    )
+    make_tf_cam_origin.add_argument("--output", default="calibration_output/workspace_transform.json")
     return parser.parse_args()
 
 
@@ -132,10 +203,16 @@ def verify_within_limits(q_deg, label=""):
         raise ValueError(f"[{label}] joint limit error: " + "; ".join(bad))
 
 
-def verify_above_desk(dfarm, q_deg, label=""):
+def verify_above_desk(dfarm, q_deg, label="", desk_z_min_m=DESK_Z_MIN_M):
+    z_values = []
     for i, T in enumerate(dfarm.fkine_all(np.deg2rad(q_deg))[1:], start=1):
-        if float(T.t[2]) < DESK_Z_MIN_M:
-            raise ValueError(f"[{label}] frame F{i} below desk guard: z={float(T.t[2]) * 1000:.1f} mm")
+        z_values.append(float(T.t[2]) * 1000.0)
+        if float(T.t[2]) < desk_z_min_m:
+            detail = ", ".join(f"F{k + 1}={z:.1f}" for k, z in enumerate(z_values))
+            raise ValueError(
+                f"[{label}] frame F{i} below desk guard: z={float(T.t[2]) * 1000:.1f} mm; "
+                f"checked z(mm): {detail}"
+            )
 
 
 def load_extrinsics(path):
@@ -210,6 +287,89 @@ def save_workspace_transform(args):
     print(f"Saved workspace transform: {out}")
 
 
+def save_workspace_transform_from_origin(args):
+    origin_board = np.array(
+        [
+            args.robot_origin_board_cm[0] / 100.0,
+            args.robot_origin_board_cm[1] / 100.0,
+            args.robot_origin_board_z_cm / 100.0,
+        ],
+        dtype=float,
+    )
+
+    transform = np.eye(4)
+    transform[0, 0] = -1.0 if args.flip_x else 1.0
+    transform[1, 1] = -1.0 if args.flip_y else 1.0
+    transform[:3, 3] = -transform[:3, :3] @ origin_board
+
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "description": (
+            "Maps board/camera-plane coordinates to robot base coordinates. "
+            "Assumes axes are parallel; use flip-x/flip-y if directions are opposite."
+        ),
+        "unit": "meter",
+        "robot_origin_board_cm": args.robot_origin_board_cm,
+        "robot_origin_board_z_cm": args.robot_origin_board_z_cm,
+        "flip_x": args.flip_x,
+        "flip_y": args.flip_y,
+        "board_to_base": transform.tolist(),
+    }
+    with out.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    print(f"Saved workspace transform: {out}")
+    print(f"Robot origin in board/camera plane: {origin_board.tolist()} m")
+    print("board_to_base:")
+    print(transform)
+
+
+def save_workspace_transform_camera_origin(args):
+    camera_origin_base = np.array(
+        [
+            args.camera_origin_base_cm[0] / 100.0,
+            args.camera_origin_base_cm[1] / 100.0,
+            args.camera_origin_base_z_cm / 100.0,
+        ],
+        dtype=float,
+    )
+
+    transform = np.eye(4)
+    transform[:3, :3] = np.array(
+        [
+            [0.0, -1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    transform[:3, 3] = camera_origin_base
+
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "description": (
+            "Maps camera/workspace plane coordinates to robot base coordinates. "
+            "Axis relation: robot_x=-camera_y, robot_y=camera_x."
+        ),
+        "unit": "meter",
+        "camera_origin_base_cm": args.camera_origin_base_cm,
+        "camera_origin_base_z_cm": args.camera_origin_base_z_cm,
+        "axis_relation": {
+            "robot_x": "-camera_y",
+            "robot_y": "camera_x",
+            "robot_z": "camera_z",
+        },
+        "board_to_base": transform.tolist(),
+    }
+    with out.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    print(f"Saved workspace transform: {out}")
+    print(f"Camera/workspace origin in robot base: {camera_origin_base.tolist()} m")
+    print("Formula: x_base = x_cam_origin - y_cam; y_base = y_cam_origin + x_cam")
+    print("board_to_base:")
+    print(transform)
+
+
 def pixel_to_plane(pixel, z_plane, camera_matrix, dist_coeffs, world_to_camera):
     camera_to_world = np.linalg.inv(world_to_camera)
     pts = np.asarray(pixel, dtype=np.float64).reshape(1, 1, 2)
@@ -226,6 +386,30 @@ def pixel_to_plane(pixel, z_plane, camera_matrix, dist_coeffs, world_to_camera):
 def board_to_base(point_board, transform):
     ph = np.array([point_board[0], point_board[1], point_board[2], 1.0])
     return (transform @ ph)[:3]
+
+
+def resolve_orientation_q(args):
+    if not args.orientation_ref:
+        return np.asarray(args.orientation_q_deg, dtype=float)
+
+    path = Path(args.orientation_ref)
+    if not path.exists():
+        raise FileNotFoundError(f"Orientation reference file not found: {path}")
+    with path.open("r", encoding="utf-8") as f:
+        poses = json.load(f)
+    if args.orientation_ref_index < 0 or args.orientation_ref_index >= len(poses):
+        raise IndexError(
+            f"--orientation-ref-index {args.orientation_ref_index} out of range; "
+            f"{path} contains {len(poses)} poses"
+        )
+    q = np.asarray(poses[args.orientation_ref_index]["joints_deg"], dtype=float)
+    if q.size != 6:
+        raise ValueError(f"Reference pose joints_deg must contain 6 values, got {q.size}")
+    print(
+        f"Using orientation from {path} index {args.orientation_ref_index}: "
+        f"{np.round(q, 2).tolist()}"
+    )
+    return q
 
 
 def make_mask(frame, color):
@@ -321,7 +505,7 @@ def make_target_pose(dfarm, q_orientation_deg, xyz_m):
     return T
 
 
-def solve_ik(dfarm, target_T, q0_deg, label):
+def solve_ik(dfarm, target_T, q0_deg, label, desk_z_min_m):
     sol = dfarm.ikine_LM(
         target_T,
         q0=np.deg2rad(q0_deg),
@@ -334,7 +518,7 @@ def solve_ik(dfarm, target_T, q0_deg, label):
         raise RuntimeError(f"{label}: IK failed: {sol.reason}")
     q_deg = np.rad2deg(sol.q)
     verify_within_limits(q_deg, label)
-    verify_above_desk(dfarm, q_deg, label)
+    verify_above_desk(dfarm, q_deg, label, desk_z_min_m)
     return q_deg, sol
 
 
@@ -350,9 +534,10 @@ def build_plan(dfarm, target_base_m, args):
     safe_xyz = grasp_xyz.copy()
     safe_xyz[2] += args.approach_height_mm / 1000.0
 
-    q_ref = np.asarray(args.orientation_q_deg, dtype=float)
-    q_safe, safe_sol = solve_ik(dfarm, make_target_pose(dfarm, q_ref, safe_xyz), q_ref, "target_safe")
-    q_grasp, grasp_sol = solve_ik(dfarm, make_target_pose(dfarm, q_ref, grasp_xyz), q_safe, "target_grasp")
+    q_ref = resolve_orientation_q(args)
+    desk_z_min_m = args.desk_z_min_mm / 1000.0
+    q_safe, safe_sol = solve_ik(dfarm, make_target_pose(dfarm, q_ref, safe_xyz), q_ref, "target_safe", desk_z_min_m)
+    q_grasp, grasp_sol = solve_ik(dfarm, make_target_pose(dfarm, q_ref, grasp_xyz), q_safe, "target_grasp", desk_z_min_m)
 
     segments = [
         ("Park -> target_safe", "move", np.asarray(PARK_POSE_DEG, dtype=float), q_safe),
@@ -373,14 +558,68 @@ def build_plan(dfarm, target_base_m, args):
     }
 
 
-def check_trajectories(dfarm, plan):
+def check_trajectories(dfarm, plan, desk_z_min_m):
     for label, kind, q0, q1 in plan["segments"]:
         if kind != "move":
             continue
         path = jtraj_deg(q0, q1)
         for k, q in enumerate(path):
             verify_within_limits(q, f"{label}/k={k}")
-            verify_above_desk(dfarm, q, f"{label}/k={k}")
+            verify_above_desk(dfarm, q, f"{label}/k={k}", desk_z_min_m)
+
+
+def simulate_plan(dfarm, plan, args):
+    from roboticstoolbox.backends.PyPlot import PyPlot
+
+    output = Path(args.animation_output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    env = PyPlot()
+    env.launch(name="Visual Grasp Simulation", limits=args.plot_box)
+    env.add(dfarm)
+    ax = env.ax
+
+    grasp = plan["grasp_xyz_m"]
+    safe = plan["safe_xyz_m"]
+    ax.scatter(*safe, color="dodgerblue", s=90, marker="^", label="target_safe", depthshade=False)
+    ax.scatter(*grasp, color="crimson", s=100, marker="o", label="target_grasp", depthshade=False)
+    ax.plot(
+        [safe[0], grasp[0]],
+        [safe[1], grasp[1]],
+        [safe[2], grasp[2]],
+        color="crimson",
+        linestyle="--",
+        linewidth=1.5,
+        label="descend path",
+    )
+    ax.legend(loc="upper left", fontsize=8)
+
+    frames = []
+    current_q = np.asarray(PARK_POSE_DEG, dtype=float)
+    for label, kind, q0, q1 in plan["segments"]:
+        if kind == "move":
+            for q_deg in jtraj_deg(q0, q1):
+                dfarm.q = np.deg2rad(q_deg)
+                env.step(0.05)
+                frames.append(env.getframe())
+            current_q = np.asarray(q1, dtype=float)
+        else:
+            for _ in range(8):
+                dfarm.q = np.deg2rad(current_q)
+                env.step(0.05)
+                frames.append(env.getframe())
+
+    if not frames:
+        raise RuntimeError("No simulation frames were generated.")
+    frames[0].save(
+        output,
+        save_all=True,
+        append_images=frames[1:],
+        optimize=False,
+        duration=80,
+        loop=0,
+    )
+    print(f"\nSimulation saved: {output} ({len(frames)} frames)")
 
 
 def _wait_positions_done(arm, id_list, timeout_s, label):
@@ -443,14 +682,6 @@ def execute_plan(plan):
 
 
 def print_plan(pixel, board_point, base_point, plan, transform_loaded):
-    print("\n=== Vision Result ===")
-    print(f"Pixel: u={pixel[0]:.2f}, v={pixel[1]:.2f}")
-    print(f"Board/world point (m): {np.round(board_point, 6).tolist()}")
-    print(f"Robot base point (m): {np.round(base_point, 6).tolist()}")
-    if not transform_loaded:
-        print("WARNING: workspace transform not found; base point currently equals board point.")
-        print("         Use make-workspace-transform before executing on real hardware.")
-
     print("\n=== Grasp Plan ===")
     print(f"grasp xyz mm: {np.round(plan['grasp_xyz_m'] * 1000, 2).tolist()}")
     print(f"safe  xyz mm: {np.round(plan['safe_xyz_m'] * 1000, 2).tolist()}")
@@ -463,10 +694,27 @@ def print_plan(pixel, board_point, base_point, plan, transform_loaded):
             print(f"{i}. [{kind}] {label}")
 
 
+def print_vision_result(pixel, board_point, base_point, transform_loaded):
+    print("\n=== Vision Result ===")
+    print(f"Pixel: u={pixel[0]:.2f}, v={pixel[1]:.2f}")
+    print(f"Board/world point (m): {np.round(board_point, 6).tolist()}")
+    print(f"Robot base point (m): {np.round(base_point, 6).tolist()}")
+    print(f"Robot base point (mm): {np.round(base_point * 1000, 2).tolist()}")
+    if not transform_loaded:
+        print("WARNING: workspace transform not found; base point currently equals board point.")
+        print("         Use make-workspace-transform before executing on real hardware.")
+
+
 def main():
     args = parse_args()
     if args.command == "make-workspace-transform":
         save_workspace_transform(args)
+        return
+    if args.command == "make-workspace-transform-from-origin":
+        save_workspace_transform_from_origin(args)
+        return
+    if args.command == "make-workspace-transform-camera-origin":
+        save_workspace_transform_camera_origin(args)
         return
 
     camera_matrix, dist_coeffs, world_to_camera = load_extrinsics(args.extrinsics)
@@ -479,11 +727,15 @@ def main():
     pixel = target["pixel"]
     board_point = pixel_to_plane(pixel, args.plane_z, camera_matrix, dist_coeffs, world_to_camera)
     base_point = board_to_base(board_point, board_to_base_T)
+    print_vision_result(pixel, board_point, base_point, transform_loaded)
 
     dfarm = make_dfarm()
     plan = build_plan(dfarm, base_point, args)
-    check_trajectories(dfarm, plan)
+    check_trajectories(dfarm, plan, args.desk_z_min_mm / 1000.0)
     print_plan(pixel, board_point, base_point, plan, transform_loaded)
+
+    if args.simulate:
+        simulate_plan(dfarm, plan, args)
 
     out_dir = Path(args.extrinsics).parent
     out_dir.mkdir(parents=True, exist_ok=True)
